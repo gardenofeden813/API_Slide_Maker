@@ -45,7 +45,7 @@ def ensure_pdf_downloaded() -> Path:
     RESOURCE_DIR.mkdir(exist_ok=True)
 
     for candidate in LOCAL_PDF_CANDIDATES:
-        if candidate.exists():
+        if candidate.is_file():
             if candidate.resolve() != PDF_PATH.resolve():
                 shutil.copyfile(candidate, PDF_PATH)
                 print(
