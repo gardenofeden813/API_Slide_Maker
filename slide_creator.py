@@ -54,6 +54,10 @@ def ensure_pdf_downloaded() -> Path:
             else:
                 print(f"ℹ️ 既存のPDF {PDF_PATH} を使用します。")
             return PDF_PATH
+        if candidate.exists():
+            print(
+                f"⚠️ {candidate} はファイルではないため、PDFとしては利用できません。"
+            )
 
     print(f"📥 Downloading source PDF from {PDF_SOURCE_URL} ...")
     try:
