@@ -245,13 +245,19 @@
             // **用語** -> <strong>用語</strong>
             htmlContent = htmlContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-            // 2.  タグを図解提案ブロックに変換
+            // 2. 図解タグ (例: <<図解: ...>>) を図解提案ブロックに変換
             //  -> <div class="image-suggestion">...</div>
-            // FIX: 画像提案タグを検出する正規表現を正しいパターンに修正
-            const imageTagRegex = /\/g; 
+            // Geminiの出力では `<<図解: 熱交換の模式図>>` や `[[image: Tankless vs Storage]]` などの形式で
+            // 図解タグが挿入される想定のため、
+            // それらを検出して専用ブロックに置き換える。
+            const imageTagRegex = /(?:<<\s*(?:図解|image)\s*:(.*?)>>|\[\[\s*(?:図解|image)\s*:(.*?)\]\])/gi;
             if (imageTagRegex.test(htmlContent)) {
-                htmlContent = htmlContent.replace(imageTagRegex, (match, content) => {
-                    return `<div class="image-suggestion">💡 推奨図解: ${content.trim()}<span>このスライドの理解を深めるため、この図解を挿入することを推奨します。</span></div>`;
+                htmlContent = htmlContent.replace(imageTagRegex, (_, angleContent, bracketContent) => {
+                    const content = (angleContent || bracketContent || '').trim();
+                    if (!content) {
+                        return '';
+                    }
+                    return `<div class="image-suggestion">💡 推奨図解: ${content}<span>このスライドの理解を深めるため、この図解を挿入することを推奨します。</span></div>`;
                 });
             }
 
@@ -280,8 +286,12 @@
                     }
                     // その他の要素（画像提案ブロックや普通の段落）を追加
                     if (trimmedLine) {
-                         // ここで画像提案ブロック（すでにHTML化されている）や、太字が適用された段落を出力
-                        finalHtml += `<p>${trimmedLine}</p>`;
+                        // 画像提案ブロックはそのまま出力し、それ以外は段落としてラップ
+                        if (trimmedLine.startsWith('<div class="image-suggestion"')) {
+                            finalHtml += trimmedLine;
+                        } else {
+                            finalHtml += `<p>${trimmedLine}</p>`;
+                        }
                     }
                 }
             });
