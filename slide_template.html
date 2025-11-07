@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>カナダ給湯器選定ガイド - プロフェッショナルデッキ</title>
+    
+    <!-- Google Fonts: Inter (ビジネスライクなモダンフォント) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Swiper CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/swiper@8/swiper-bundle.min.css" />
+
+    <style>
+        :root {
+            --primary-color: #005694; /* ディープブルー */
+            --secondary-color: #e0e6ec; /* ライトグレー */
+            --text-color: #333;
+            --light-text-color: #f8f8f8;
+            --slide-width: 90vw;
+            --slide-height: 80vh;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: #f5f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* Swiperコンテナのスタイリング */
+        .swiper {
+            width: var(--slide-width);
+            height: var(--slide-height);
+            max-width: 1400px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            border-radius: 12px;
+            background-color: white;
+            position: relative;
+        }
+
+        .swiper-slide {
+            display: flex;
+            flex-direction: column;
+            padding: 40px 60px;
+            box-sizing: border-box;
+            line-height: 1.6;
+        }
+
+        /* --- ヘッダー/フッターのデザイン --- */
+        header {
+            color: var(--primary-color);
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--secondary-color);
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+        }
+        
+        footer {
+            margin-top: auto; /* 常に下部に固定 */
+            padding-top: 15px;
+            border-top: 1px solid var(--secondary-color);
+            color: var(--text-color);
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 400;
+        }
+
+        /* --- コンテンツのデザイン --- */
+        h1 {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            font-weight: 700;
+            margin: 0 0 20px 0;
+            line-height: 1.2;
+        }
+
+        /* スライドコンテンツエリア */
+        .content-area {
+            flex-grow: 1;
+            overflow-y: auto; /* 情報量が増えてもスクロール可能に */
+            padding-right: 15px; /* スクロールバーとコンテンツの間にスペースを設ける */
+        }
+        
+        /* 箇条書きと段落のスタイリング */
+        .content-area p {
+            font-size: 1.1rem;
+            color: var(--text-color);
+            margin-bottom: 15px;
+            white-space: pre-wrap; /* LLMの整形を維持 */
+        }
+
+        .content-area ul, .content-area ol {
+            padding-left: 20px;
+            margin: 15px 0;
+            font-size: 1.1rem;
+        }
+        
+        .content-area li {
+            margin-bottom: 8px;
+            padding-left: 5px;
+        }
+
+        /* 太字の強化 */
+        .content-area strong {
+            color: var(--primary-color);
+            font-weight: 700;
+            padding: 2px 0;
+        }
+        
+        /* 画像提案ブロックのスタイル */
+        .image-suggestion {
+            background-color: #f0f8ff; /* 薄い青の背景 */
+            border: 1px solid #cceeff;
+            border-left: 5px solid var(--primary-color);
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            font-size: 1rem;
+            color: #1f3d61;
+            font-weight: 600;
+        }
+        .image-suggestion span {
+            font-weight: 400;
+            color: #555;
+            display: block;
+            margin-top: 5px;
+        }
+
+        /* Swiper ナビゲーションボタン */
+        .swiper-button-next, .swiper-button-prev {
+            color: var(--primary-color);
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .swiper-button-next:hover, .swiper-button-prev:hover {
+            opacity: 1;
+        }
+
+        /* ページネーション（ドット） */
+        .swiper-pagination-bullet-active {
+            background: var(--primary-color);
+        }
+
+        /* レスポンシブ対応 (モバイル向け) */
+        @media (max-width: 768px) {
+            .swiper {
+                width: 95vw;
+                height: 90vh;
+                border-radius: 0;
+            }
+            .swiper-slide {
+                padding: 20px 30px;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            .content-area p, .content-area li {
+                font-size: 0.95rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Swiper -->
+<div class="swiper">
+    <div class="swiper-wrapper">
+        {% for slide in slides %}
+        <div class="swiper-slide">
+            
+            <header>
+                <span>カナダ給湯器選定ガイド | 専門家レビュー</span>
+                <span>Slide {{ loop.index }} / {{ loop.length }}</span>
+            </header>
+            
+            <h1>{{ slide.title }}</h1>
+            
+            <div class="content-area">
+                <!-- テンプレートエンジンでLLMのテキストを挿入 -->
+                <p>{{ slide.body }}</p>
+            </div>
+            
+            <footer>
+                <span style="color: var(--primary-color); font-weight: 600;">[機密情報] 外部共有禁止</span>
+                <span>最終更新: 2025年11月7日</span>
+            </footer>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- ナビゲーションボタン -->
+    <div class="swiper-button-next"></div>
+    <div class="swiper-button-prev"></div>
+    
+    <!-- ページネーション -->
+    <div class="swiper-pagination"></div>
+</div>
+
+<!-- Swiper JS -->
+<script src="https://unpkg.com/swiper@8/swiper-bundle.min.js"></script>
+<script>
+    window.onload = function() {
+        // Swiperの初期化
+        const swiper = new Swiper('.swiper', {
+            direction: 'horizontal', // 横スライド
+            loop: false, // ループなし
+            effect: 'slide', // 標準のスライドエフェクト
+            
+            pagination: {
+                el: '.swiper-pagination',
+                clickable: true,
+            },
+
+            navigation: {
+                nextEl: '.swiper-button-next',
+                prevEl: '.swiper-button-prev',
+            },
+            
+            keyboard: {
+                enabled: true,
+            },
+            
+            mousewheel: {
+                enabled: true,
+            }
+        });
+        
+        // --- コンテンツの整形（太字、箇条書き、画像提案の処理） ---
+        document.querySelectorAll('.content-area p').forEach(p => {
+            let htmlContent = p.textContent;
+            
+            // 1. **太字** を <strong> タグに変換
+            // **用語** -> <strong>用語</strong>
+            htmlContent = htmlContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            // 2.  タグを図解提案ブロックに変換
+            //  -> <div class="image-suggestion">...</div>
+            // FIX: 画像提案タグを検出する正規表現を正しいパターンに修正
+            const imageTagRegex = /\/g; 
+            if (imageTagRegex.test(htmlContent)) {
+                htmlContent = htmlContent.replace(imageTagRegex, (match, content) => {
+                    return `<div class="image-suggestion">💡 推奨図解: ${content.trim()}<span>このスライドの理解を深めるため、この図解を挿入することを推奨します。</span></div>`;
+                });
+            }
+
+            // 3. 箇条書き（- または *）を HTMLリスト構造に変換
+            // LLMの出力はプレーンテキストのため、箇条書きの行を検出して<ul><li>に変換する
+            const lines = htmlContent.split('\n');
+            let isInsideList = false;
+            let finalHtml = '';
+
+            lines.forEach(line => {
+                const trimmedLine = line.trim();
+                const listItemMatch = trimmedLine.match(/^([-*])\s*(.*)/); // - または * で始まる行を検出
+
+                if (listItemMatch) {
+                    // リストアイテムの場合
+                    if (!isInsideList) {
+                        finalHtml += '<ul>'; // リスト開始
+                        isInsideList = true;
+                    }
+                    finalHtml += `<li>${listItemMatch[2]}</li>`;
+                } else {
+                    // リストアイテムではない場合
+                    if (isInsideList) {
+                        finalHtml += '</ul>'; // リスト終了
+                        isInsideList = false;
+                    }
+                    // その他の要素（画像提案ブロックや普通の段落）を追加
+                    if (trimmedLine) {
+                         // ここで画像提案ブロック（すでにHTML化されている）や、太字が適用された段落を出力
+                        finalHtml += `<p>${trimmedLine}</p>`;
+                    }
+                }
+            });
+
+            if (isInsideList) {
+                finalHtml += '</ul>'; // ループ終了時にリストが閉じられていなければ閉じる
+            }
+
+            // 元の <p> 要素を新しいコンテンツで置き換える
+            const newDiv = document.createElement('div');
+            newDiv.innerHTML = finalHtml;
+            p.parentNode.replaceChild(newDiv, p);
+        });
+    };
+</script>
+
+</body>
+</html>
