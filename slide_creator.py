@@ -15,6 +15,11 @@ try:
 except ImportError:
     fitz = None
 
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+
 # --- 1 初期設定とプロンプトの読み込み ---
 load_dotenv()
 # Google AI Studioで取得したキーは "GEMINI_API_KEY" で設定することを推奨
@@ -86,6 +91,91 @@ def ensure_pdf_available() -> Path:
         "参照用PDFが見つかりません。プロジェクトフォルダに 'WaterHeaterGuide_e.pdf' を配置するか、"
         "環境変数 SOURCE_PDF_PATH で場所を指定してください。自動ダウンロードは行われません。"
     )
+
+
+def extract_images_from_pdf(pdf_path: Path):
+    """Extract images using PyMuPDF if available and return catalog metadata."""
+
+    if fitz is None:
+        print(
+            "⚠️ PyMuPDF がインストールされていないため、PDFからの画像抽出をスキップします。\n"
+            "    -> 'pip install pymupdf' を実行後に再度スクリプトを実行すると画像を利用できます。"
+        )
+        return {}
+
+    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    catalog = {}
+
+    with fitz.open(pdf_path) as doc:
+        for page_index, page in enumerate(doc, start=1):
+            page_text = page.get_text("text").strip()
+            context_excerpt = shorten(
+                " ".join(page_text.split()), width=240, placeholder="…"
+            )
+            images = page.get_images(full=True)
+            if not images:
+                continue
+
+            for img_index, img in enumerate(images, start=1):
+                xref = img[0]
+                base_name = f"page-{page_index:03d}-image-{img_index:02d}"
+                pix = fitz.Pixmap(doc, xref)
+
+                if pix.n >= 5:  # CMYKなど
+                    pix_converted = fitz.Pixmap(fitz.csRGB, pix)
+                    pix = pix_converted
+                elif pix.alpha:
+                    pix_converted = fitz.Pixmap(fitz.csRGB, pix)
+                    pix = pix_converted
+
+                image_path = IMAGE_DIR / f"{base_name}.png"
+                pix.save(image_path.as_posix())
+                pix = None  # free resources
+
+                catalog[base_name] = {
+                    "src": image_path.as_posix(),
+                    "page": page_index,
+                    "width": img[2],
+                    "height": img[3],
+                    "context": context_excerpt,
+                }
+
+    if catalog:
+        print(
+            f"✅ PDFから {len(catalog)} 件の画像を抽出しました。スライドに必要な画像を image_refs で指定できます。"
+        )
+    else:
+        print("ℹ️ PDFから抽出できる画像はありませんでした。")
+
+    return catalog
+
+PDF_SOURCE_URL = (
+    "https://natural-resources.canada.ca/sites/nrcan/files/energy/pdf/energystar/WaterHeaterGuide_e.pdf"
+)
+RESOURCE_DIR = Path("resources")
+PDF_PATH = RESOURCE_DIR / "water_heater_guide.pdf"
+IMAGE_DIR = RESOURCE_DIR / "images"
+
+
+def ensure_pdf_downloaded() -> Path:
+    """Download the source PDF if it does not yet exist."""
+
+    RESOURCE_DIR.mkdir(exist_ok=True)
+    if PDF_PATH.exists():
+        return PDF_PATH
+
+    print(f"📥 Downloading source PDF from {PDF_SOURCE_URL} ...")
+    try:
+        response = requests.get(PDF_SOURCE_URL, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            "ソースPDFのダウンロードに失敗しました。ネットワーク接続を確認してください。"
+        ) from exc
+
+    PDF_PATH.write_bytes(response.content)
+    print(f"✅ PDFを {PDF_PATH} に保存しました。")
+    return PDF_PATH
 
 
 def extract_images_from_pdf(pdf_path: Path):
