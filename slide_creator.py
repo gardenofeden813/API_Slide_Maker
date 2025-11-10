@@ -1,6 +1,5 @@
 import os
 import json
-import shutil
 from pathlib import Path
 from textwrap import shorten
 
@@ -34,58 +33,12 @@ PDF_PATH = RESOURCE_DIR / "water_heater_guide.pdf"
 IMAGE_DIR = RESOURCE_DIR / "images"
 
 
-def iter_pdf_candidates():
-    """Yield plausible local PDF locations in priority order."""
-
-    seen = set()
-    queue = []
-
-    def add(path_like):
-        if not path_like:
-            return
-        try:
-            path_obj = Path(path_like).expanduser()
-        except TypeError:
-            return
-        resolved = path_obj.resolve()
-        if resolved in seen:
-            return
-        seen.add(resolved)
-        queue.append(path_obj)
-
-    # 1. The cached resources file itself.
-    add(PDF_PATH)
-
-    # 2. User-specified override via environment variable.
-    add(os.getenv("SOURCE_PDF_PATH"))
-
-    # 3. Repository committed variants.
-    add("WaterHeaterGuide_e.pdf")
-    add(RESOURCE_DIR / "WaterHeaterGuide_e.pdf")
-
-    for candidate in queue:
-        yield candidate
-
-
 def ensure_pdf_downloaded() -> Path:
     """Download the source PDF if it does not yet exist."""
 
     RESOURCE_DIR.mkdir(exist_ok=True)
-
-    for candidate in iter_pdf_candidates():
-        if candidate.is_file():
-            if candidate.resolve() != PDF_PATH.resolve():
-                shutil.copyfile(candidate, PDF_PATH)
-                print(
-                    f"ℹ️ 既存のPDF {candidate} を {PDF_PATH} として利用します。"
-                )
-            else:
-                print(f"ℹ️ 既存のPDF {PDF_PATH} を使用します。")
-            return PDF_PATH
-        if candidate.exists():
-            print(
-                f"⚠️ {candidate} はファイルではないため、PDFとしては利用できません。"
-            )
+    if PDF_PATH.exists():
+        return PDF_PATH
 
     print(f"📥 Downloading source PDF from {PDF_SOURCE_URL} ...")
     try:
