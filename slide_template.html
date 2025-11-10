@@ -137,6 +137,36 @@
             margin-top: 5px;
         }
 
+        /* PDF画像ギャラリー */
+        .slide-image-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+            margin-bottom: 24px;
+        }
+
+        .slide-image-card {
+            margin: 0;
+            background-color: #f6f9fc;
+            border: 1px solid #d8e2ee;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+        }
+
+        .slide-image-card img {
+            width: 100%;
+            display: block;
+            object-fit: cover;
+        }
+
+        .slide-image-card figcaption {
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            color: #2d3a4d;
+            line-height: 1.4;
+        }
+
         /* Swiper ナビゲーションボタン */
         .swiper-button-next, .swiper-button-prev {
             color: var(--primary-color);
@@ -186,8 +216,23 @@
             </header>
             
             <h1>{{ slide.title }}</h1>
-            
+
             <div class="content-area">
+                {% if slide.image_refs %}
+                <div class="slide-image-gallery">
+                    {% for image_id in slide.image_refs %}
+                        {% set meta = image_catalog.get(image_id) if image_catalog else None %}
+                        {% if meta %}
+                        <figure class="slide-image-card">
+                            <img src="{{ meta.src }}" alt="Water Heater Guide 図版 (ページ {{ meta.page }})">
+                            <figcaption>
+                                ページ {{ meta.page }} | {{ (meta.context or '参照PDFの図版') | truncate(120, True, '…') }}
+                            </figcaption>
+                        </figure>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
                 <!-- テンプレートエンジンでLLMのテキストを挿入 -->
                 <p>{{ slide.body }}</p>
             </div>
@@ -245,13 +290,19 @@
             // **用語** -> <strong>用語</strong>
             htmlContent = htmlContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-            // 2.  タグを図解提案ブロックに変換
+            // 2. 図解タグ (例: <<図解: ...>>) を図解提案ブロックに変換
             //  -> <div class="image-suggestion">...</div>
-            // FIX: 画像提案タグを検出する正規表現を正しいパターンに修正
-            const imageTagRegex = /\/g; 
+            // Geminiの出力では `<<図解: 熱交換の模式図>>` や `[[image: Tankless vs Storage]]` などの形式で
+            // 図解タグが挿入される想定のため、
+            // それらを検出して専用ブロックに置き換える。
+            const imageTagRegex = /(?:<<\s*(?:図解|image)\s*:(.*?)>>|\[\[\s*(?:図解|image)\s*:(.*?)\]\])/gi;
             if (imageTagRegex.test(htmlContent)) {
-                htmlContent = htmlContent.replace(imageTagRegex, (match, content) => {
-                    return `<div class="image-suggestion">💡 推奨図解: ${content.trim()}<span>このスライドの理解を深めるため、この図解を挿入することを推奨します。</span></div>`;
+                htmlContent = htmlContent.replace(imageTagRegex, (_, angleContent, bracketContent) => {
+                    const content = (angleContent || bracketContent || '').trim();
+                    if (!content) {
+                        return '';
+                    }
+                    return `<div class="image-suggestion">💡 推奨図解: ${content}<span>このスライドの理解を深めるため、この図解を挿入することを推奨します。</span></div>`;
                 });
             }
 
@@ -280,8 +331,12 @@
                     }
                     // その他の要素（画像提案ブロックや普通の段落）を追加
                     if (trimmedLine) {
-                         // ここで画像提案ブロック（すでにHTML化されている）や、太字が適用された段落を出力
-                        finalHtml += `<p>${trimmedLine}</p>`;
+                        // 画像提案ブロックはそのまま出力し、それ以外は段落としてラップ
+                        if (trimmedLine.startsWith('<div class="image-suggestion"')) {
+                            finalHtml += trimmedLine;
+                        } else {
+                            finalHtml += `<p>${trimmedLine}</p>`;
+                        }
                     }
                 }
             });
