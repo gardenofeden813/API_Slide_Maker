@@ -120,18 +120,24 @@ def extract_images_from_pdf(pdf_path: Path):
                 xref = img[0]
                 base_name = f"page-{page_index:03d}-image-{img_index:02d}"
                 pix = fitz.Pixmap(doc, xref)
-
-                if pix.n >= 5:  # CMYKなど
-                    pix_converted = fitz.Pixmap(fitz.csRGB, pix)
-                    pix = pix_converted
-                elif pix.alpha:
-                    pix_converted = fitz.Pixmap(fitz.csRGB, pix)
-                    pix = pix_converted
-
+            
+                # カラースペース変換（安全版）
+                if pix.n > 4 or pix.colorspace is None:
+                    pix = fitz.Pixmap(fitz.csRGB, pix)
+                elif pix.colorspace.n not in (1, 3):  # グレー(1) or RGB(3) 以外なら変換
+                    pix = fitz.Pixmap(fitz.csRGB, pix)
+                elif pix.alpha:  # 透過チャネルがある場合
+                    pix = fitz.Pixmap(fitz.csRGB, pix)
+            
                 image_path = IMAGE_DIR / f"{base_name}.png"
-                pix.save(image_path.as_posix())
-                pix = None  # free resources
-
+                try:
+                    pix.save(image_path.as_posix())
+                except Exception as e:
+                    print(f"⚠️ {base_name} の保存に失敗: {e}")
+                    continue  # スキップして次へ
+            
+                pix = None  # リソース解放
+            
                 catalog[base_name] = {
                     "src": image_path.as_posix(),
                     "page": page_index,
@@ -378,4 +384,5 @@ with open("output.html", "w", encoding="utf-8") as f:
 
 print("\n----------------------------------------------------")
 print(f"✅ output.html を生成しました！スライド数: {len(slides)}")
+
 print("----------------------------------------------------")
