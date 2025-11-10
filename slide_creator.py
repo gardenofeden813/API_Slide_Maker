@@ -1,12 +1,8 @@
 import os
 import json
+import shutil
 from pathlib import Path
 from textwrap import shorten
-
-try:
-    import requests
-except ImportError as exc:
-    raise SystemExit("'requests' パッケージが必要です。`pip install requests` を実行してください。") from exc
 from jinja2 import Template
 from dotenv import load_dotenv
 
@@ -19,11 +15,139 @@ try:
 except ImportError:
     fitz = None
 
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+
 # --- 1 初期設定とプロンプトの読み込み ---
 load_dotenv()
 # Google AI Studioで取得したキーは "GEMINI_API_KEY" で設定することを推奨
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 MODEL_NAME = "gemini-2.5-flash"
+
+RESOURCE_DIR = Path("resources")
+PDF_PATH = RESOURCE_DIR / "water_heater_guide.pdf"
+IMAGE_DIR = RESOURCE_DIR / "images"
+
+
+def iter_pdf_candidates():
+    """Yield plausible local PDF locations in priority order."""
+
+    seen = set()
+    queue = []
+
+    def add(path_like):
+        if not path_like:
+            return
+        try:
+            path_obj = Path(path_like).expanduser()
+        except TypeError:
+            return
+        resolved = path_obj.resolve()
+        if resolved in seen:
+            return
+        seen.add(resolved)
+        queue.append(path_obj)
+
+    # 1. The cached resources file itself.
+    add(PDF_PATH)
+
+    # 2. User-specified override via environment variable.
+    add(os.getenv("SOURCE_PDF_PATH"))
+
+    # 3. Windows absolute path when the project is checked out alongside the asset.
+    add(r"C:\Users\TA96939\Documents\CanadianWaterHeaterResearchProject\WaterHeaterGuide_e.pdf")
+
+    # 4. Repository committed variants.
+    add("WaterHeaterGuide_e.pdf")
+    add(RESOURCE_DIR / "WaterHeaterGuide_e.pdf")
+
+    for candidate in queue:
+        yield candidate
+
+
+def ensure_pdf_available() -> Path:
+    """Ensure a local PDF asset exists and copy it into the cache if needed."""
+
+    RESOURCE_DIR.mkdir(exist_ok=True)
+
+    for candidate in iter_pdf_candidates():
+        if candidate.is_file():
+            if candidate.resolve() != PDF_PATH.resolve():
+                shutil.copyfile(candidate, PDF_PATH)
+                print(
+                    f"ℹ️ 既存のPDF {candidate} を {PDF_PATH} として利用します。"
+                )
+            else:
+                print(f"ℹ️ 既存のPDF {PDF_PATH} を使用します。")
+            return PDF_PATH
+        if candidate.exists():
+            print(
+                f"⚠️ {candidate} はファイルではないため、PDFとしては利用できません。"
+            )
+
+    raise FileNotFoundError(
+        "参照用PDFが見つかりません。プロジェクトフォルダに 'WaterHeaterGuide_e.pdf' を配置するか、"
+        "環境変数 SOURCE_PDF_PATH で場所を指定してください。自動ダウンロードは行われません。"
+    )
+
+
+def extract_images_from_pdf(pdf_path: Path):
+    """Extract images using PyMuPDF if available and return catalog metadata."""
+
+    if fitz is None:
+        print(
+            "⚠️ PyMuPDF がインストールされていないため、PDFからの画像抽出をスキップします。\n"
+            "    -> 'pip install pymupdf' を実行後に再度スクリプトを実行すると画像を利用できます。"
+        )
+        return {}
+
+    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    catalog = {}
+
+    with fitz.open(pdf_path) as doc:
+        for page_index, page in enumerate(doc, start=1):
+            page_text = page.get_text("text").strip()
+            context_excerpt = shorten(
+                " ".join(page_text.split()), width=240, placeholder="…"
+            )
+            images = page.get_images(full=True)
+            if not images:
+                continue
+
+            for img_index, img in enumerate(images, start=1):
+                xref = img[0]
+                base_name = f"page-{page_index:03d}-image-{img_index:02d}"
+                pix = fitz.Pixmap(doc, xref)
+
+                if pix.n >= 5:  # CMYKなど
+                    pix_converted = fitz.Pixmap(fitz.csRGB, pix)
+                    pix = pix_converted
+                elif pix.alpha:
+                    pix_converted = fitz.Pixmap(fitz.csRGB, pix)
+                    pix = pix_converted
+
+                image_path = IMAGE_DIR / f"{base_name}.png"
+                pix.save(image_path.as_posix())
+                pix = None  # free resources
+
+                catalog[base_name] = {
+                    "src": image_path.as_posix(),
+                    "page": page_index,
+                    "width": img[2],
+                    "height": img[3],
+                    "context": context_excerpt,
+                }
+
+    if catalog:
+        print(
+            f"✅ PDFから {len(catalog)} 件の画像を抽出しました。スライドに必要な画像を image_refs で指定できます。"
+        )
+    else:
+        print("ℹ️ PDFから抽出できる画像はありませんでした。")
+
+    return catalog
 
 PDF_SOURCE_URL = (
     "https://natural-resources.canada.ca/sites/nrcan/files/energy/pdf/energystar/WaterHeaterGuide_e.pdf"
@@ -122,8 +246,8 @@ if not prompt.strip():
     exit()
 
 try:
-    pdf_path = ensure_pdf_downloaded()
-except RuntimeError as exc:
+    pdf_path = ensure_pdf_available()
+except FileNotFoundError as exc:
     print(f"⚠️ {exc}")
     exit()
 
@@ -155,10 +279,11 @@ full_prompt = f"""
 - 各スライドは必ず以下の構造を持つオブジェクトとしてください: {{"title": "スライドタイトル", "body": "箇条書きや段落で構成された詳細な説明"}}
     - bodyの内容は、以下のルールに従い、**プレゼンテーション資料として最適化**してください。
         1.  **太字強調**: 重要なキーワードや専門用語は、必ずアスタリスク2つで囲んで**太字**にしてください (例: `**エネルギー効率**`)。
-        2.  **箇条書きの活用**: 3つ以上の並列情報やリストは必ず箇条書き（`-` または `*`）を使用し、分類された構造（見出し＋箇条書き）を意識してください。
-        3.  **スピークラインの短文化**: 箇条書きの各行は「名詞＋キーワード」中心の**短いフレーズ**とし、1行40文字以内を目安にしてください。
-        4.  **図解の提案**: 複雑な概念（例：システム構造、比較表、フロー、重要用語）を説明するスライドでは、聴衆の理解を深めるため、bodyの**冒頭に**関連する図解を提案するタグを挿入してください。タグの形式は `` とし、日本語で具体的な内容を指定してください（例: ``）。
-        5.  **PDF画像の活用**: 参照PDFから抽出した図版を使う場合は `"image_refs": ["<ID>", ...]` を追加し、IDは下記カタログから選択してください。
+        2.  **セクション構造**: 各スライド本文は必ず2つ以上のセクションで構成し、各セクションの先頭に `## セクション名`（必要に応じて `### サブセクション名`）を置いたうえで、その直後に箇条書きを配置してください。
+        3.  **箇条書きの厳守**: 3つ以上の並列情報やリストは必ず箇条書き（`-` または `*`）を使用し、分類された構造（見出し＋箇条書き）を意識してください。
+        4.  **スピークラインの短文化**: 箇条書きの各行は「名詞＋キーワード」中心の**短いフレーズ**とし、1行40文字以内を目安にしてください。
+        5.  **図解の提案**: 複雑な概念（例：システム構造、比較表、フロー、重要用語）を説明するスライドでは、聴衆の理解を深めるため、bodyの**冒頭に**関連する図解を提案するタグを挿入してください。タグの形式は `` とし、日本語で具体的な内容を指定してください（例: ``）。
+        6.  **PDF画像の活用**: 参照PDFから抽出した図版を使う場合は `"image_refs": ["<ID>", ...]` を追加し、IDは下記カタログから選択してください。
     - スライドの総数は40枚以内としてください。
 
 [Supporting Assets]:

@@ -111,6 +111,32 @@
             padding-left: 5px;
         }
 
+        .content-area h2 {
+            font-size: 1.35rem;
+            color: #0b3d71;
+            font-weight: 700;
+            margin: 22px 0 10px;
+            position: relative;
+        }
+
+        .content-area h2::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: -6px;
+            width: 48px;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), rgba(0, 86, 148, 0));
+            border-radius: 999px;
+        }
+
+        .content-area h3 {
+            font-size: 1.15rem;
+            color: #224a73;
+            font-weight: 600;
+            margin: 14px 0 6px;
+        }
+
         /* 太字の強化 */
         .content-area strong {
             color: var(--primary-color);
@@ -314,30 +340,47 @@
 
             lines.forEach(line => {
                 const trimmedLine = line.trim();
-                const listItemMatch = trimmedLine.match(/^([-*])\s*(.*)/); // - または * で始まる行を検出
+                if (!trimmedLine) {
+                    return;
+                }
 
+                const headingMatch = trimmedLine.match(/^(#{2,3})\s+(.*)/);
+                if (headingMatch) {
+                    if (isInsideList) {
+                        finalHtml += '</ul>';
+                        isInsideList = false;
+                    }
+                    const level = headingMatch[1].length;
+                    const headingContent = headingMatch[2].trim();
+                    if (headingContent) {
+                        if (level === 2) {
+                            finalHtml += `<h2>${headingContent}</h2>`;
+                        } else {
+                            finalHtml += `<h3>${headingContent}</h3>`;
+                        }
+                    }
+                    return;
+                }
+
+                const listItemMatch = trimmedLine.match(/^([-*])\s*(.*)/); // - または * で始まる行を検出
                 if (listItemMatch) {
-                    // リストアイテムの場合
                     if (!isInsideList) {
-                        finalHtml += '<ul>'; // リスト開始
+                        finalHtml += '<ul>';
                         isInsideList = true;
                     }
                     finalHtml += `<li>${listItemMatch[2]}</li>`;
+                    return;
+                }
+
+                if (isInsideList) {
+                    finalHtml += '</ul>';
+                    isInsideList = false;
+                }
+
+                if (trimmedLine.startsWith('<div class="image-suggestion"')) {
+                    finalHtml += trimmedLine;
                 } else {
-                    // リストアイテムではない場合
-                    if (isInsideList) {
-                        finalHtml += '</ul>'; // リスト終了
-                        isInsideList = false;
-                    }
-                    // その他の要素（画像提案ブロックや普通の段落）を追加
-                    if (trimmedLine) {
-                        // 画像提案ブロックはそのまま出力し、それ以外は段落としてラップ
-                        if (trimmedLine.startsWith('<div class="image-suggestion"')) {
-                            finalHtml += trimmedLine;
-                        } else {
-                            finalHtml += `<p>${trimmedLine}</p>`;
-                        }
-                    }
+                    finalHtml += `<p>${trimmedLine}</p>`;
                 }
             });
 
