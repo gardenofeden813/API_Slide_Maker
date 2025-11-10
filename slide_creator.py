@@ -1,8 +1,12 @@
 import os
 import json
-import shutil
 from pathlib import Path
 from textwrap import shorten
+
+try:
+    import requests
+except ImportError as exc:
+    raise SystemExit("'requests' パッケージが必要です。`pip install requests` を実行してください。") from exc
 from jinja2 import Template
 from dotenv import load_dotenv
 
@@ -21,71 +25,33 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 MODEL_NAME = "gemini-2.5-flash"
 
+PDF_SOURCE_URL = (
+    "https://natural-resources.canada.ca/sites/nrcan/files/energy/pdf/energystar/WaterHeaterGuide_e.pdf"
+)
 RESOURCE_DIR = Path("resources")
 PDF_PATH = RESOURCE_DIR / "water_heater_guide.pdf"
 IMAGE_DIR = RESOURCE_DIR / "images"
 
 
-def iter_pdf_candidates():
-    """Yield plausible local PDF locations in priority order."""
-
-    seen = set()
-    queue = []
-
-    def add(path_like):
-        if not path_like:
-            return
-        try:
-            path_obj = Path(path_like).expanduser()
-        except TypeError:
-            return
-        resolved = path_obj.resolve()
-        if resolved in seen:
-            return
-        seen.add(resolved)
-        queue.append(path_obj)
-
-    # 1. The cached resources file itself.
-    add(PDF_PATH)
-
-    # 2. User-specified override via environment variable.
-    add(os.getenv("SOURCE_PDF_PATH"))
-
-    # 3. Windows absolute path when the project is checked out alongside the asset.
-    add(r"C:\Users\TA96939\Documents\CanadianWaterHeaterResearchProject\WaterHeaterGuide_e.pdf")
-
-    # 4. Repository committed variants.
-    add("WaterHeaterGuide_e.pdf")
-    add(RESOURCE_DIR / "WaterHeaterGuide_e.pdf")
-
-    for candidate in queue:
-        yield candidate
-
-
-def ensure_pdf_available() -> Path:
-    """Ensure a local PDF asset exists and copy it into the cache if needed."""
+def ensure_pdf_downloaded() -> Path:
+    """Download the source PDF if it does not yet exist."""
 
     RESOURCE_DIR.mkdir(exist_ok=True)
+    if PDF_PATH.exists():
+        return PDF_PATH
 
-    for candidate in iter_pdf_candidates():
-        if candidate.is_file():
-            if candidate.resolve() != PDF_PATH.resolve():
-                shutil.copyfile(candidate, PDF_PATH)
-                print(
-                    f"ℹ️ 既存のPDF {candidate} を {PDF_PATH} として利用します。"
-                )
-            else:
-                print(f"ℹ️ 既存のPDF {PDF_PATH} を使用します。")
-            return PDF_PATH
-        if candidate.exists():
-            print(
-                f"⚠️ {candidate} はファイルではないため、PDFとしては利用できません。"
-            )
+    print(f"📥 Downloading source PDF from {PDF_SOURCE_URL} ...")
+    try:
+        response = requests.get(PDF_SOURCE_URL, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            "ソースPDFのダウンロードに失敗しました。ネットワーク接続を確認してください。"
+        ) from exc
 
-    raise FileNotFoundError(
-        "参照用PDFが見つかりません。プロジェクトフォルダに 'WaterHeaterGuide_e.pdf' を配置するか、"
-        "環境変数 SOURCE_PDF_PATH で場所を指定してください。"
-    )
+    PDF_PATH.write_bytes(response.content)
+    print(f"✅ PDFを {PDF_PATH} に保存しました。")
+    return PDF_PATH
 
 
 def extract_images_from_pdf(pdf_path: Path):
@@ -156,8 +122,8 @@ if not prompt.strip():
     exit()
 
 try:
-    pdf_path = ensure_pdf_available()
-except FileNotFoundError as exc:
+    pdf_path = ensure_pdf_downloaded()
+except RuntimeError as exc:
     print(f"⚠️ {exc}")
     exit()
 
